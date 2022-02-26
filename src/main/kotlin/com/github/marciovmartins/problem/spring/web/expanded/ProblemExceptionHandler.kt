@@ -3,11 +3,11 @@ package com.github.marciovmartins.problem.spring.web.expanded
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
-import kotlin.reflect.full.cast
 import org.springframework.data.rest.core.RepositoryConstraintViolationException
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.FieldError
+import org.springframework.validation.ObjectError
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.context.request.NativeWebRequest
@@ -41,9 +41,7 @@ class ProblemExceptionHandler : ProblemHandling {
         exception: RepositoryConstraintViolationException,
         request: NativeWebRequest,
     ): ResponseEntity<Problem> {
-        val violations = exception.errors.allErrors
-            .map { FieldError::class.cast(it) }
-            .map { Violation(it.field, it.defaultMessage!!) }
+        val violations = exception.errors.allErrors.map { it.toViolation() }
         val problem = Problem.builder()
             .withTitle("Constraint Violation")
             .withStatus(defaultConstraintViolationStatus())
@@ -82,4 +80,11 @@ private fun Collection<JsonMappingException.Reference>.mapFieldPath() =
 private fun mapPath(it: JsonMappingException.Reference): String = when (it.from) {
     is Collection<*> -> "[]"
     else -> ".${it.fieldName}"
+}
+
+private fun ObjectError.toViolation(): Violation {
+    if (this is FieldError) {
+        return Violation(this.field, this.defaultMessage!!)
+    }
+    return Violation(null, this.defaultMessage!!)
 }
